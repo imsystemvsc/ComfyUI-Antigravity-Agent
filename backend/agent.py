@@ -5,7 +5,10 @@ Streams reasoning and response tokens, and drives the tool-calling loop against 
 """
 
 import asyncio
+import json
 import logging
+import os
+from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 logger = logging.getLogger("ComfyUI-Antigravity-Agent.Agent")
@@ -45,9 +48,26 @@ class AntigravityAgentRunner:
             await on_token(error_msg)
             return error_msg
 
+        # Load config for api_key or model preferences
+        api_key = os.environ.get("GEMINI_API_KEY")
+        config_path = Path(__file__).resolve().parents[1] / "config.json"
+        if not api_key and config_path.exists():
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    cfg_data = json.load(f)
+                    api_key = cfg_data.get("api_key") or None
+            except Exception:
+                pass
+
+        if not api_key:
+            err_msg = "A Gemini API Key is required. Please obtain a free key at https://aistudio.google.com and enter it in the Antigravity settings or set the GEMINI_API_KEY environment variable."
+            await on_token(err_msg)
+            return err_msg
+
         config = LocalAgentConfig(
             system_instructions=SYSTEM_PROMPT,
             capabilities=CapabilitiesConfig(),
+            api_key=api_key,
         )
 
         full_reply = []

@@ -52,7 +52,15 @@ export class AntigravityChatView {
     this.btnMode.innerHTML = "⧉ Float";
     this.btnMode.onclick = () => this.toggleMode();
 
+    // API Key Config Button
+    this.btnKey = document.createElement("button");
+    this.btnKey.className = "antigravity-btn antigravity-btn-subtle";
+    this.btnKey.title = "Configure Free Gemini API Key";
+    this.btnKey.innerHTML = "⚙ Key";
+    this.btnKey.onclick = () => this.promptApiKey();
+
     controlsBox.appendChild(this.btnRevert);
+    controlsBox.appendChild(this.btnKey);
     controlsBox.appendChild(this.btnMode);
 
     this.header.appendChild(titleBox);
@@ -214,6 +222,9 @@ export class AntigravityChatView {
     const contentBox = this.activeStreamingElem.querySelector(".antigravity-msg-text");
     if (contentBox) {
       contentBox.innerText += token;
+      if (contentBox.innerText.includes("API Key") || contentBox.innerText.includes("[Agent Error]")) {
+        this.activeStreamingElem.classList.add("error-message");
+      }
       this.messageList.scrollTop = this.messageList.scrollHeight;
     }
   }
@@ -257,6 +268,24 @@ export class AntigravityChatView {
   handleRevert() {
     const res = this.executor.revertSnapshot();
     this.appendMessage("assistant", res.message);
+  }
+
+  async promptApiKey() {
+    const key = prompt("Enter your Gemini API Key (free from https://aistudio.google.com):");
+    if (key !== null && key.trim()) {
+      try {
+        const resp = await fetch("/antigravity/set_key", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: key.trim() }),
+        });
+        if (resp.ok) {
+          this.appendMessage("assistant", "✓ API Key saved successfully! You can now send requests to Antigravity.");
+        }
+      } catch (e) {
+        alert("Failed to save API Key: " + e.message);
+      }
+    }
   }
 
   toggleMode() {

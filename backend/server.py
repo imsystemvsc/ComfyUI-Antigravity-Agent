@@ -145,6 +145,23 @@ async def list_models_endpoint(request: web.Request) -> web.Response:
     return web.json_response(scan)
 
 
+async def set_key_endpoint(request: web.Request) -> web.Response:
+    data = await request.json()
+    new_key = data.get("api_key", "").strip()
+    config_path = Path(__file__).resolve().parents[1] / "config.json"
+    cfg_data = {}
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg_data = json.load(f)
+        except Exception:
+            pass
+    cfg_data["api_key"] = new_key
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(cfg_data, f, indent=2)
+    return web.json_response({"status": "ok"})
+
+
 def init_routes(target: Any):
     """Registers endpoints onto ComfyUI's routes table or aiohttp application."""
     if hasattr(target, "get") and callable(target.get):
@@ -153,10 +170,13 @@ def init_routes(target: Any):
         target.get("/antigravity/templates")(list_templates_endpoint)
         target.post("/antigravity/save_template")(save_template_endpoint)
         target.get("/antigravity/models")(list_models_endpoint)
+        target.post("/antigravity/set_key")(set_key_endpoint)
     elif hasattr(target, "router"):
         # Target is PromptServer.instance.app (web.Application)
         target.router.add_get("/antigravity/ws", ws_handler)
         target.router.add_get("/antigravity/templates", list_templates_endpoint)
         target.router.add_post("/antigravity/save_template", save_template_endpoint)
         target.router.add_get("/antigravity/models", list_models_endpoint)
+        target.router.add_post("/antigravity/set_key", set_key_endpoint)
+
 
