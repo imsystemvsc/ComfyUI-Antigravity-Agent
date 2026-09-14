@@ -1,0 +1,77 @@
+{
+  "name": "flux2_klein",
+  "description": "FLUX.2 Klein pipeline configured for int8-ConvRot and NVFP4 models paired with Qwen3 text encoders and Flux2/Qwen VAE.",
+  "category": "Flux2",
+  "exposed_inputs": [],
+  "exposed_outputs": [
+    {"source_node": 6, "slot": "IMAGE", "slot_type": "IMAGE"}
+  ],
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [50, 100],
+      "size": [315, 82],
+      "widgets_values": ["flux-2-klein-9b-int8-ConvRot-comfyui.safetensors"]
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoaderGGUF",
+      "pos": [50, 220],
+      "size": [315, 82],
+      "widgets_values": ["Qwen3-8B-heretic.Q4_K_M.gguf"]
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [50, 340],
+      "size": [315, 58],
+      "widgets_values": ["flux2-vae.safetensors"]
+    },
+    {
+      "id": 4,
+      "type": "CLIPTextEncode",
+      "pos": [420, 100],
+      "size": [400, 200],
+      "widgets_values": ["a stunning photograph, cinematic lighting, ultra detailed, 8k"]
+    },
+    {
+      "id": 5,
+      "type": "EmptyLatentImage",
+      "pos": [420, 340],
+      "size": [315, 106],
+      "widgets_values": [1024, 1024, 1]
+    },
+    {
+      "id": 6,
+      "type": "KSampler",
+      "pos": [880, 150],
+      "size": [315, 474],
+      "widgets_values": [0, "randomize", 20, 1.0, "euler", "simple", 1.0]
+    },
+    {
+      "id": 7,
+      "type": "VAEDecode",
+      "pos": [1250, 150],
+      "size": [210, 46],
+      "widgets_values": []
+    },
+    {
+      "id": 8,
+      "type": "SaveImage",
+      "pos": [1250, 250],
+      "size": [315, 270],
+      "widgets_values": ["Flux2Klein"]
+    }
+  ],
+  "internal_links": [
+    [1, 1, 0, 6, 0, "MODEL"],
+    [2, 2, 0, 4, 0, "CLIP"],
+    [3, 4, 0, 6, 1, "CONDITIONING"],
+    [4, 4, 0, 6, 2, "CONDITIONING"],
+    [5, 5, 0, 6, 3, "LATENT"],
+    [6, 6, 0, 7, 0, "LATENT"],
+    [7, 3, 0, 7, 1, "VAE"],
+    [8, 7, 0, 8, 0, "IMAGE"]
+  ]
+}
