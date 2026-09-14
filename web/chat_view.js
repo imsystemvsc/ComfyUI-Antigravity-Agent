@@ -135,8 +135,17 @@ export class AntigravityChatView {
 
     this.ws = new WebSocket(wsUrl);
 
-    this.ws.onopen = () => {
+    this.ws.onopen = async () => {
       this.updateStatusPill("Connecting to Sidecar...", "online");
+      try {
+        const resp = await fetch("/antigravity/engine_status");
+        if (resp.ok) {
+          const status = await resp.json();
+          this.updateEngineStatus(status);
+        }
+      } catch (e) {
+        console.warn("[Antigravity] Initial status fetch error:", e);
+      }
       this.ws.send(JSON.stringify({ type: "get_engine_status" }));
     };
 
@@ -188,24 +197,35 @@ export class AntigravityChatView {
       const { request_id, action, params } = data;
       let result = {};
 
-      if (action === "apply_graph_patch") {
-        result = this.executor.applyPatch(params);
-        if (this.root.querySelector("#antigravity-auto-queue")?.checked) {
-          this.app.queuePrompt(0);
+      try {
+        if (action === "apply_graph_patch") {
+          result = this.executor.applyPatch(params);
+          if (this.root.querySelector("#antigravity-auto-queue")?.checked) {
+            this.app.queuePrompt(0);
+          }
+        } else if (action === "get_current_graph") {
+          result = this.executor.getCompactGraph();
+        } else if (action === "queue_workflow") {
+          result = await this.app.queuePrompt(0);
+        } else if (action === "apply_template_data") {
+          result = this.executor.applyTemplate(params.template, params.target_node_id);
+        } else {
+          result = { error: `Unknown canvas action: ${action}` };
         }
-      } else if (action === "get_current_graph") {
-        result = this.executor.captureSnapshot();
-      } else if (action === "queue_workflow") {
-        result = await this.app.queuePrompt(0);
+      } catch (err) {
+        console.error(`[Antigravity] Canvas action error:`, err);
+        result = { error: err.message || String(err) };
       }
 
-      this.ws.send(
-        JSON.stringify({
-          type: "canvas_action_result",
-          request_id,
-          result,
-        })
-      );
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(
+          JSON.stringify({
+            type: "canvas_action_result",
+            request_id,
+            result: result || {},
+          })
+        );
+      }
     }
   }
 
@@ -224,8 +244,12 @@ export class AntigravityChatView {
       })
     );
 
-    // Prepare assistant streaming container
+    // Prepare assistant streaming container with an animated thinking state
     this.activeStreamingElem = this.appendMessage("assistant", "");
+    const textElem = this.activeStreamingElem.querySelector(".antigravity-msg-text");
+    if (textElem) {
+      textElem.innerHTML = `<span class="antigravity-thinking-pulse">✦ Antigravity is reasoning...</span>`;
+    }
   }
 
   streamToken(token) {
@@ -234,10 +258,15 @@ export class AntigravityChatView {
     }
     const textElem = this.activeStreamingElem.querySelector(".antigravity-msg-text");
     if (textElem) {
+      const pulse = textElem.querySelector(".antigravity-thinking-pulse");
+      if (pulse) {
+        textElem.innerHTML = "";
+      }
       textElem.innerText += token;
     }
     this.messageList.scrollTop = this.messageList.scrollHeight;
   }
+
 
   streamThought(thought) {
     if (!this.activeStreamingElem) {

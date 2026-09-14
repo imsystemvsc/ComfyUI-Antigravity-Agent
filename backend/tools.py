@@ -192,3 +192,6 @@ class AntigravityToolDispatcher:
         except Exception as e:
             logger.error(f"Error executing tool {name}: {e}", exc_info=True)
             return {"error": str(e)}
+
+    dispatch = execute_tool
+

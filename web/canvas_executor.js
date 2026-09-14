@@ -53,6 +53,10 @@ class CanvasExecutor {
     return serializeCompactGraph(this.graph);
   }
 
+  captureSnapshot() {
+    return this.getCompactGraph();
+  }
+
   applyPatch(patch) {
     if (!this.graph) {
       return { success: false, error: "No active graph found on canvas." };
@@ -65,6 +69,8 @@ class CanvasExecutor {
     const results = { created: [], updated: [], connected: [], deleted: [] };
 
     try {
+      const lg = window.LiteGraph || (typeof LiteGraph !== "undefined" ? LiteGraph : null);
+
       // Step 2: Handle Creations
       if (Array.isArray(patch.creates)) {
         for (const item of patch.creates) {
@@ -73,7 +79,7 @@ class CanvasExecutor {
           const pos = item.pos || [100, 100];
           const widgets = item.widgets || {};
 
-          const node = window.LiteGraph.createNode(nodeType);
+          const node = lg && lg.createNode ? lg.createNode(nodeType) : null;
           if (!node) {
             console.warn(`[Antigravity] Node type '${nodeType}' not recognized.`);
             continue;
@@ -81,6 +87,7 @@ class CanvasExecutor {
 
           node.pos = [pos[0], pos[1]];
           this.graph.add(node);
+
 
           // Apply initial widget values
           if (node.widgets && Array.isArray(node.widgets)) {

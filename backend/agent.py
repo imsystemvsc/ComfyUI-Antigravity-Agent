@@ -119,9 +119,14 @@ class AntigravityAgentRunner:
                     t_name = call.get("name", "")
                     t_args = call.get("arguments", {})
                     await on_action(t_name, t_args)
+                    await on_thought(f"Executing `{t_name}` on canvas...")
 
                     try:
-                        result = await self.tool_dispatcher.dispatch(t_name, t_args)
+                        dispatcher_fn = getattr(self.tool_dispatcher, "execute_tool", None) or getattr(self.tool_dispatcher, "dispatch", None)
+                        if dispatcher_fn:
+                            result = await dispatcher_fn(t_name, t_args)
+                        else:
+                            result = {"error": "Tool dispatcher has neither execute_tool nor dispatch"}
                     except Exception as ex:
                         result = {"error": str(ex)}
 
@@ -138,6 +143,7 @@ class AntigravityAgentRunner:
             # No tool calls: final text response
             self.history.append({"role": "assistant", "content": clean_text})
             full_reply_accum.append(clean_text)
+
 
             # Stream response smoothly by tokens/words
             words = clean_text.split(" ")

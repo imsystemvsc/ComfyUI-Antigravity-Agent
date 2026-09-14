@@ -135,18 +135,45 @@
   color: #94a3b8;
   font-style: italic;
   margin-bottom: 6px;
-  border-left: 2px solid #6366f1;
-  padding-left: 6px;
+  border-left: 2px solid #818cf8;
+  padding: 4px 8px;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 4px;
 }
 
-.antigravity-receipt {
+.antigravity-thought-header {
+  font-weight: 600;
+  color: #a5b4fc;
+  margin-bottom: 2px;
+  font-style: normal;
+}
+
+.antigravity-action-receipt, .antigravity-receipt {
   font-size: 11px;
   background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-  border-radius: 4px;
-  padding: 4px 8px;
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  color: #c7d2fe;
+  border-radius: 6px;
+  padding: 4px 10px;
   align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
 }
+
+.antigravity-thinking-pulse {
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 12px;
+  animation: antigravity-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes antigravity-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1.0; color: #a5b4fc; }
+}
+
 
 /* Footer & Input */
 .antigravity-footer {
