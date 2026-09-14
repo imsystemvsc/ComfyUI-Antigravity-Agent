@@ -145,9 +145,18 @@ async def list_models_endpoint(request: web.Request) -> web.Response:
     return web.json_response(scan)
 
 
-def init_routes(app: web.Application):
-    """Registers endpoints onto ComfyUI's aiohttp application."""
-    app.router.add_get("/antigravity/ws", ws_handler)
-    app.router.add_get("/antigravity/templates", list_templates_endpoint)
-    app.router.add_post("/antigravity/save_template", save_template_endpoint)
-    app.router.add_get("/antigravity/models", list_models_endpoint)
+def init_routes(target: Any):
+    """Registers endpoints onto ComfyUI's routes table or aiohttp application."""
+    if hasattr(target, "get") and callable(target.get):
+        # Target is PromptServer.instance.routes (RouteTableDef)
+        target.get("/antigravity/ws")(ws_handler)
+        target.get("/antigravity/templates")(list_templates_endpoint)
+        target.post("/antigravity/save_template")(save_template_endpoint)
+        target.get("/antigravity/models")(list_models_endpoint)
+    elif hasattr(target, "router"):
+        # Target is PromptServer.instance.app (web.Application)
+        target.router.add_get("/antigravity/ws", ws_handler)
+        target.router.add_get("/antigravity/templates", list_templates_endpoint)
+        target.router.add_post("/antigravity/save_template", save_template_endpoint)
+        target.router.add_get("/antigravity/models", list_models_endpoint)
+

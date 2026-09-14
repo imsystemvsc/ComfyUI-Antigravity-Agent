@@ -18,13 +18,17 @@ NODE_DISPLAY_NAME_MAPPINGS = {}
 
 try:
     import server
+    from server import PromptServer
     from .backend.server import init_routes
     from .backend.error_interceptor import init_error_interceptor
 
-    prompt_server = server.PromptServer.instance
-    init_routes(prompt_server.app)
-    init_error_interceptor(prompt_server)
-    logger.info("[ComfyUI-Antigravity-Agent] Routes and Error Interceptor registered successfully.")
+    if hasattr(PromptServer, "instance") and PromptServer.instance is not None:
+        ps = PromptServer.instance
+        target_routes = getattr(ps, "routes", None) or getattr(ps, "app", None)
+        if target_routes is not None:
+            init_routes(target_routes)
+            init_error_interceptor(ps)
+            logger.info("[ComfyUI-Antigravity-Agent] Routes and Error Interceptor registered successfully.")
 except Exception as e:
     logger.error(f"[ComfyUI-Antigravity-Agent] Initialization warning: {e}")
 
