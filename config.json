@@ -1,0 +1,24 @@
+{
+  "auto_queue": false,
+  "vram_threshold_gb": 16,
+  "vision_thumbnail_max_dim": 512,
+  "ui_mode_default": "sidebar",
+  "history_window_turns": 8,
+  "default_pairings": {
+    "flux": {
+      "clip1": "clip_l.safetensors",
+      "clip2_low_vram": "t5xxl_fp8_e4m3fn.safetensors",
+      "clip2_high_vram": "t5xxl_fp16.safetensors",
+      "vae": "ae.safetensors"
+    },
+    "sdxl": {
+      "clip1": "clip_l.safetensors",
+      "clip2": "clip_g.safetensors",
+      "vae": "sdxl_vae.safetensors"
+    },
+    "sd15": {
+      "clip1": "clip_l.safetensors",
+      "vae": "vae-ft-mse-840000-ema-pruned.safetensors"
+    }
+  }
+}

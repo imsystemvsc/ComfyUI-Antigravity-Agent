@@ -1,0 +1,85 @@
+{
+  "name": "flux_dev_gguf",
+  "description": "Standard Flux Dev GGUF pipeline with UnetLoaderGGUF, DualCLIPLoader, FluxGuidance, EmptyLatent, and VAE Decode.",
+  "category": "Flux",
+  "exposed_inputs": [],
+  "exposed_outputs": [
+    {"source_node": 7, "slot": "IMAGE", "slot_type": "IMAGE"}
+  ],
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UnetLoaderGGUF",
+      "pos": [50, 100],
+      "size": [315, 82],
+      "widgets_values": ["flux1-dev-Q4_K_M.gguf"]
+    },
+    {
+      "id": 2,
+      "type": "DualCLIPLoader",
+      "pos": [50, 240],
+      "size": [315, 106],
+      "widgets_values": ["clip_l.safetensors", "t5xxl_fp8_e4m3fn.safetensors", "flux"]
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [50, 400],
+      "size": [315, 58],
+      "widgets_values": ["ae.safetensors"]
+    },
+    {
+      "id": 4,
+      "type": "CLIPTextEncode",
+      "pos": [420, 100],
+      "size": [400, 200],
+      "widgets_values": ["a hyperdetailed photo of a mechanical owl made of brass gears, warm ambient lighting, 8k"]
+    },
+    {
+      "id": 5,
+      "type": "FluxGuidance",
+      "pos": [420, 350],
+      "size": [315, 58],
+      "widgets_values": [3.5]
+    },
+    {
+      "id": 6,
+      "type": "EmptyLatentImage",
+      "pos": [420, 460],
+      "size": [315, 106],
+      "widgets_values": [1024, 1024, 1]
+    },
+    {
+      "id": 7,
+      "type": "KSampler",
+      "pos": [880, 150],
+      "size": [315, 474],
+      "widgets_values": [0, "randomize", 20, 1.0, "euler", "simple", 1.0]
+    },
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [1250, 150],
+      "size": [210, 46],
+      "widgets_values": []
+    },
+    {
+      "id": 9,
+      "type": "SaveImage",
+      "pos": [1250, 250],
+      "size": [315, 270],
+      "widgets_values": ["FluxDev"]
+    }
+  ],
+  "internal_links": [
+    [1, 1, 0, 7, 0, "MODEL"],
+    [2, 2, 0, 4, 0, "CLIP"],
+    [3, 4, 0, 5, 0, "CONDITIONING"],
+    [4, 5, 0, 7, 1, "CONDITIONING"],
+    [5, 4, 0, 7, 2, "CONDITIONING"],
+    [6, 6, 0, 7, 3, "LATENT"],
+    [7, 7, 0, 8, 0, "LATENT"],
+    [8, 3, 0, 8, 1, "VAE"],
+    [9, 8, 0, 9, 0, "IMAGE"]
+  ]
+}

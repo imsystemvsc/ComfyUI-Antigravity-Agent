@@ -1,0 +1,50 @@
+{
+  "name": "hires_fix",
+  "description": "Modular 2nd-pass Latent Upscale (Hi-Res Fix) subgraph. Slices into any existing workflow requiring LATENT, MODEL, CONDITIONING, and VAE.",
+  "category": "Enhancement",
+  "exposed_inputs": [
+    {"target_node_id": 1, "target_slot": 0, "slot_type": "LATENT"},
+    {"target_node_id": 2, "target_slot": 0, "slot_type": "MODEL"},
+    {"target_node_id": 2, "target_slot": 1, "slot_type": "CONDITIONING"},
+    {"target_node_id": 2, "target_slot": 2, "slot_type": "CONDITIONING"},
+    {"target_node_id": 3, "target_slot": 1, "slot_type": "VAE"}
+  ],
+  "exposed_outputs": [
+    {"origin_node_id": 3, "origin_slot": 0, "slot_type": "IMAGE"}
+  ],
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LatentUpscaleBy",
+      "pos": [0, 0],
+      "size": [315, 82],
+      "widgets_values": ["nearest-exact", 1.5]
+    },
+    {
+      "id": 2,
+      "type": "KSampler",
+      "pos": [360, 0],
+      "size": [315, 474],
+      "widgets_values": [0, "randomize", 15, 7.0, "dpmpp_2m", "karras", 0.45]
+    },
+    {
+      "id": 3,
+      "type": "VAEDecode",
+      "pos": [720, 0],
+      "size": [210, 46],
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "SaveImage",
+      "pos": [720, 100],
+      "size": [315, 270],
+      "widgets_values": ["HiRes_Upscale"]
+    }
+  ],
+  "internal_links": [
+    [1, 1, 0, 2, 3, "LATENT"],
+    [2, 2, 0, 3, 0, "LATENT"],
+    [3, 3, 0, 4, 0, "IMAGE"]
+  ]
+}
