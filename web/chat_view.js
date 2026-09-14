@@ -13,6 +13,7 @@ export class AntigravityChatView {
     this.ws = null;
     this.messages = [];
     this.activeStreamingElem = null;
+    this.engineStatus = null;
 
     this.initDOM();
     this.initWebSocket();
@@ -45,6 +46,13 @@ export class AntigravityChatView {
     this.btnRevert.innerHTML = "↶ Revert";
     this.btnRevert.onclick = () => this.handleRevert();
 
+    // Engine / Model Selector Button
+    this.btnEngine = document.createElement("button");
+    this.btnEngine.className = "antigravity-btn antigravity-btn-subtle";
+    this.btnEngine.title = "Antigravity Subscription & Model Settings";
+    this.btnEngine.innerHTML = "✦ Engine";
+    this.btnEngine.onclick = () => this.openEngineDialog();
+
     // Mode Switcher (Dock / Float)
     this.btnMode = document.createElement("button");
     this.btnMode.className = "antigravity-btn antigravity-btn-subtle";
@@ -52,15 +60,8 @@ export class AntigravityChatView {
     this.btnMode.innerHTML = "⧉ Float";
     this.btnMode.onclick = () => this.toggleMode();
 
-    // API Key Config Button
-    this.btnKey = document.createElement("button");
-    this.btnKey.className = "antigravity-btn antigravity-btn-subtle";
-    this.btnKey.title = "Configure Free Gemini API Key";
-    this.btnKey.innerHTML = "⚙ Key";
-    this.btnKey.onclick = () => this.promptApiKey();
-
     controlsBox.appendChild(this.btnRevert);
-    controlsBox.appendChild(this.btnKey);
+    controlsBox.appendChild(this.btnEngine);
     controlsBox.appendChild(this.btnMode);
 
     this.header.appendChild(titleBox);
@@ -78,7 +79,7 @@ export class AntigravityChatView {
     // Initial greeting
     this.appendMessage(
       "assistant",
-      "Hello! I am your local **Antigravity Agent**. I have full authority to construct, rewire, and tune your ComfyUI canvas without API keys. What would you like to build or adjust?"
+      "Hello! I am your **Antigravity Agent**, connected directly to your active Antigravity subscription in the background. I have full authority to construct, inspect, and wire your ComfyUI canvas with zero API keys. What would you like to build or modify?"
     );
 
     // 4. Input Area
@@ -92,7 +93,7 @@ export class AntigravityChatView {
         <input type="checkbox" id="antigravity-auto-queue" />
         Auto-Queue
       </label>
-      <span class="antigravity-status" id="antigravity-status-pill">Connected</span>
+      <span class="antigravity-status" id="antigravity-status-pill">Connecting...</span>
     `;
     this.footer.appendChild(toolbar);
 
@@ -119,10 +120,9 @@ export class AntigravityChatView {
     inputRow.appendChild(this.textarea);
     inputRow.appendChild(this.btnSend);
     this.footer.appendChild(inputRow);
-
     this.root.appendChild(this.footer);
 
-    // Floating wrapper container appended to body
+    // Floating Wrapper attached to document.body
     this.floatingWrapper = document.createElement("div");
     this.floatingWrapper.id = "antigravity-floating-wrapper";
     this.floatingWrapper.className = "antigravity-floating-wrapper hidden";
@@ -136,19 +136,12 @@ export class AntigravityChatView {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      const pill = this.root.querySelector("#antigravity-status-pill");
-      if (pill) {
-        pill.innerText = "Connected";
-        pill.className = "antigravity-status online";
-      }
+      this.updateStatusPill("Connecting to Sidecar...", "online");
+      this.ws.send(JSON.stringify({ type: "get_engine_status" }));
     };
 
     this.ws.onclose = () => {
-      const pill = this.root.querySelector("#antigravity-status-pill");
-      if (pill) {
-        pill.innerText = "Disconnected";
-        pill.className = "antigravity-status offline";
-      }
+      this.updateStatusPill("Disconnected", "offline");
       setTimeout(() => this.initWebSocket(), 3000);
     };
 
@@ -162,10 +155,30 @@ export class AntigravityChatView {
     };
   }
 
+  updateStatusPill(text, stateClass) {
+    const pill = this.root.querySelector("#antigravity-status-pill");
+    if (pill) {
+      pill.innerText = text;
+      pill.className = `antigravity-status ${stateClass}`;
+    }
+  }
+
+  updateEngineStatus(status) {
+    this.engineStatus = status;
+    if (status && status.running) {
+      const modelName = status.model_info?.name || status.model || "Active";
+      this.updateStatusPill(`✦ ${modelName}`, "online");
+    } else {
+      this.updateStatusPill("Antigravity Disconnected", "offline");
+    }
+  }
+
   async handleServerMessage(data) {
     const { type } = data;
 
-    if (type === "token_delta") {
+    if (type === "engine_status") {
+      this.updateEngineStatus(data.status);
+    } else if (type === "token_delta") {
       this.streamToken(data.delta);
     } else if (type === "thought_delta") {
       this.streamThought(data.thought);
@@ -178,21 +191,19 @@ export class AntigravityChatView {
       if (action === "apply_graph_patch") {
         result = this.executor.applyPatch(params);
         if (this.root.querySelector("#antigravity-auto-queue")?.checked) {
-          this.executor.queueWorkflow();
+          this.app.queuePrompt(0);
         }
       } else if (action === "get_current_graph") {
-        result = this.executor.getCompactGraph();
-      } else if (action === "apply_template_data") {
-        result = this.executor.applyTemplate(params.template, params.target_node_id);
+        result = this.executor.captureSnapshot();
       } else if (action === "queue_workflow") {
-        result = this.executor.queueWorkflow();
+        result = await this.app.queuePrompt(0);
       }
 
       this.ws.send(
         JSON.stringify({
           type: "canvas_action_result",
-          request_id: request_id,
-          result: result,
+          request_id,
+          result,
         })
       );
     }
@@ -205,48 +216,57 @@ export class AntigravityChatView {
     this.appendMessage("user", text);
     this.textarea.value = "";
 
-    this.activeStreamingElem = this.appendMessage("assistant", "");
-
+    // Send to server
     this.ws.send(
       JSON.stringify({
         type: "user_prompt",
         prompt: text,
       })
     );
+
+    // Prepare assistant streaming container
+    this.activeStreamingElem = this.appendMessage("assistant", "");
   }
 
   streamToken(token) {
     if (!this.activeStreamingElem) {
       this.activeStreamingElem = this.appendMessage("assistant", "");
     }
-    const contentBox = this.activeStreamingElem.querySelector(".antigravity-msg-text");
-    if (contentBox) {
-      contentBox.innerText += token;
-      if (contentBox.innerText.includes("API Key") || contentBox.innerText.includes("[Agent Error]")) {
-        this.activeStreamingElem.classList.add("error-message");
-      }
-      this.messageList.scrollTop = this.messageList.scrollHeight;
+    const textElem = this.activeStreamingElem.querySelector(".antigravity-msg-text");
+    if (textElem) {
+      textElem.innerText += token;
     }
+    this.messageList.scrollTop = this.messageList.scrollHeight;
   }
 
   streamThought(thought) {
-    // Displays subtle collapsible reasoning indicator
     if (!this.activeStreamingElem) {
       this.activeStreamingElem = this.appendMessage("assistant", "");
     }
+
     let thoughtBox = this.activeStreamingElem.querySelector(".antigravity-thought-box");
     if (!thoughtBox) {
       thoughtBox = document.createElement("div");
       thoughtBox.className = "antigravity-thought-box";
-      this.activeStreamingElem.insertBefore(thoughtBox, this.activeStreamingElem.firstChild);
+      thoughtBox.innerHTML = `
+        <div class="antigravity-thought-header">✦ Antigravity Thinking</div>
+        <div class="antigravity-thought-content"></div>
+      `;
+      this.activeStreamingElem.prepend(thoughtBox);
     }
-    thoughtBox.innerText = `Thinking: ${thought}`;
+
+    const contentElem = thoughtBox.querySelector(".antigravity-thought-content");
+    contentElem.innerText = thought;
+    this.messageList.scrollTop = this.messageList.scrollHeight;
   }
 
   appendActionReceipt(toolName, args) {
     const receipt = document.createElement("div");
-    receipt.className = "antigravity-receipt";
-    receipt.innerHTML = `⚙ Executed <strong>${toolName}</strong>`;
+    receipt.className = "antigravity-action-receipt";
+    receipt.innerHTML = `
+      <span class="receipt-icon">⚡</span>
+      <span class="receipt-text">Executing <b>${toolName}</b></span>
+    `;
     this.messageList.appendChild(receipt);
     this.messageList.scrollTop = this.messageList.scrollHeight;
   }
@@ -270,21 +290,34 @@ export class AntigravityChatView {
     this.appendMessage("assistant", res.message);
   }
 
-  async promptApiKey() {
-    const key = prompt("Enter your Gemini API Key (free from https://aistudio.google.com):");
-    if (key !== null && key.trim()) {
-      try {
-        const resp = await fetch("/antigravity/set_key", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ api_key: key.trim() }),
-        });
-        if (resp.ok) {
-          this.appendMessage("assistant", "✓ API Key saved successfully! You can now send requests to Antigravity.");
-        }
-      } catch (e) {
-        alert("Failed to save API Key: " + e.message);
+  openEngineDialog() {
+    const status = this.engineStatus || {};
+    const isRunning = status.running || false;
+    const currentModel = status.model || "gemini-3.8-flash-high";
+    const models = status.available_models || {
+      "gemini-3.8-flash-high": "Gemini 3.8 Flash (High Thinking)",
+      "gemini-3.7-flash-high": "Gemini 3.7 Flash (High Thinking)",
+      "claude-sonnet-4-6": "Claude Sonnet 4.6 (Thinking)",
+    };
+
+    const options = Object.entries(models)
+      .map(([k, name]) => `${k === currentModel ? "▶" : "  "} [${k}]: ${name}`)
+      .join("\n");
+
+    const promptText = 
+      `✦ Antigravity Background Engine\n` +
+      `Status: ${isRunning ? `Connected (PID: ${status.pid}, Port: ${status.port})` : "Disconnected (Launch Antigravity)"}\n` +
+      `Auth: Zero API Key Mode (Direct Subscription Sidecar)\n\n` +
+      `Available Models:\n${options}\n\n` +
+      `To switch model, enter model ID (e.g. gemini-3.8-flash-high, gemini-3.7-flash-high, claude-sonnet-4-6):`;
+
+    const choice = prompt(promptText, currentModel);
+    if (choice && choice.trim() && choice.trim() !== currentModel && models[choice.trim()]) {
+      const selected = choice.trim();
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: "set_model", model: selected }));
       }
+      this.appendMessage("assistant", `✓ Switched active Antigravity model to **${models[selected]}**.`);
     }
   }
 
@@ -292,14 +325,12 @@ export class AntigravityChatView {
     this.isFloating = !this.isFloating;
 
     if (this.isFloating) {
-      // Reparent to floating wrapper in body
       this.floatingWrapper.appendChild(this.root);
       this.floatingWrapper.classList.remove("hidden");
       this.root.classList.remove("docked");
       this.root.classList.add("floating");
       this.btnMode.innerHTML = "⊟ Dock";
     } else {
-      // Reparent back to sidebar container
       if (this.sidebarContainer) {
         this.sidebarContainer.appendChild(this.root);
       }

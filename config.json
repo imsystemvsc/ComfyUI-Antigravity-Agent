@@ -1,5 +1,6 @@
 {
   "auto_queue": false,
+  "default_model": "gemini-3.8-flash-high",
   "vram_threshold_gb": 16,
   "vision_thumbnail_max_dim": 512,
   "ui_mode_default": "sidebar",

@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 from aiohttp import web
 
 from .agent import AntigravityAgentRunner
+from .antigravity_bridge import SUPPORTED_MODELS, bridge
 from .error_interceptor import get_last_error
 from .model_scanner import ModelScanner
 from .template_manager import TemplateManager
@@ -79,6 +80,13 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     manager.active_ws = ws
     logger.info("[Antigravity] Browser chat client connected.")
 
+    # Send initial connection state immediately
+    bridge_status = bridge.get_status()
+    await ws.send_json({
+        "type": "engine_status",
+        "status": bridge_status,
+    })
+
     try:
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
@@ -111,6 +119,21 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     req_id = data.get("request_id")
                     result = data.get("result", {})
                     manager.handle_canvas_response(req_id, result)
+
+                elif msg_type == "set_model":
+                    model_key = data.get("model")
+                    if model_key in SUPPORTED_MODELS:
+                        bridge.active_model_key = model_key
+                        await ws.send_json({
+                            "type": "engine_status",
+                            "status": bridge.get_status(),
+                        })
+
+                elif msg_type == "get_engine_status":
+                    await ws.send_json({
+                        "type": "engine_status",
+                        "status": bridge.get_status(),
+                    })
 
                 elif msg_type == "ping":
                     await ws.send_json({"type": "pong"})
@@ -145,21 +168,22 @@ async def list_models_endpoint(request: web.Request) -> web.Response:
     return web.json_response(scan)
 
 
-async def set_key_endpoint(request: web.Request) -> web.Response:
+async def engine_status_endpoint(request: web.Request) -> web.Response:
+    return web.json_response(bridge.get_status())
+
+
+async def set_model_endpoint(request: web.Request) -> web.Response:
     data = await request.json()
-    new_key = data.get("api_key", "").strip()
-    config_path = Path(__file__).resolve().parents[1] / "config.json"
-    cfg_data = {}
-    if config_path.exists():
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                cfg_data = json.load(f)
-        except Exception:
-            pass
-    cfg_data["api_key"] = new_key
-    with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(cfg_data, f, indent=2)
-    return web.json_response({"status": "ok"})
+    model_key = data.get("model", "")
+    if model_key in SUPPORTED_MODELS:
+        bridge.active_model_key = model_key
+        return web.json_response({"status": "ok", "active_model": model_key})
+    return web.json_response({"status": "error", "message": f"Unknown model: {model_key}"}, status=400)
+
+
+async def set_key_endpoint(request: web.Request) -> web.Response:
+    """Preserved for backwards compatibility."""
+    return web.json_response({"status": "ok", "message": "Using local Antigravity subscription - no key needed"})
 
 
 def init_routes(target: Any):
@@ -170,6 +194,8 @@ def init_routes(target: Any):
         target.get("/antigravity/templates")(list_templates_endpoint)
         target.post("/antigravity/save_template")(save_template_endpoint)
         target.get("/antigravity/models")(list_models_endpoint)
+        target.get("/antigravity/engine_status")(engine_status_endpoint)
+        target.post("/antigravity/set_model")(set_model_endpoint)
         target.post("/antigravity/set_key")(set_key_endpoint)
     elif hasattr(target, "router"):
         # Target is PromptServer.instance.app (web.Application)
@@ -177,6 +203,6 @@ def init_routes(target: Any):
         target.router.add_get("/antigravity/templates", list_templates_endpoint)
         target.router.add_post("/antigravity/save_template", save_template_endpoint)
         target.router.add_get("/antigravity/models", list_models_endpoint)
+        target.router.add_get("/antigravity/engine_status", engine_status_endpoint)
+        target.router.add_post("/antigravity/set_model", set_model_endpoint)
         target.router.add_post("/antigravity/set_key", set_key_endpoint)
-
-
